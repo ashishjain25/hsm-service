@@ -1,0 +1,18 @@
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    keyStoreType: PKCS12
+    key-store: classpath:keystore.p12
+    key-store-password: changeit
+  
+spring:
+  application:
+    name: hsm-service
+
+pkcs11:
+  module-path: C:\\T-Mobile\\BouncyHsm\\native\\Win-x64\\BouncyHsm.Pkcs11Lib.dll
+hsm:
+  google-cloud:
+    project-id: hsmservice-project
+    location: in
