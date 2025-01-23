@@ -1,10 +1,7 @@
 package com.tmobile.hsmservice.service;
 
-import java.time.Instant;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.List;
-import java.util.Vector;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,9 +12,7 @@ import iaik.pkcs.pkcs11.MechanismInfo;
 import iaik.pkcs.pkcs11.Session;
 import iaik.pkcs.pkcs11.TokenException;
 import iaik.pkcs.pkcs11.objects.AESSecretKey;
-import iaik.pkcs.pkcs11.objects.ByteArrayAttribute;
 import iaik.pkcs.pkcs11.objects.KeyPair;
-import iaik.pkcs.pkcs11.objects.PublicKey;
 import iaik.pkcs.pkcs11.objects.RSAPrivateKey;
 import iaik.pkcs.pkcs11.objects.RSAPublicKey;
 import iaik.pkcs.pkcs11.wrapper.PKCS11Constants;

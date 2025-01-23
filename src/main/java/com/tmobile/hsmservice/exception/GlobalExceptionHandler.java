@@ -3,9 +3,10 @@ package com.tmobile.hsmservice.exception;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
-import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -15,9 +16,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.google.gson.JsonObject;
 
 import io.grpc.StatusRuntimeException;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -44,7 +42,6 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<String> handleValidationExceptions(MissingServletRequestParameterException ex) {
 		JsonObject jsonObject = new JsonObject();
 		jsonObject.addProperty("message", ex.getMessage());
-		//ErrorResponse response = ErrorResponse.builder(ex, ex.getBody()).build();
 		return new ResponseEntity<>(jsonObject.toString(), HttpStatus.BAD_REQUEST);
 	}
 	
@@ -53,7 +50,6 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<String> handleValidationExceptions(StatusRuntimeException ex) {
 		JsonObject jsonObject = new JsonObject();
 		jsonObject.addProperty("message", ex.getMessage());
-		//ErrorResponse response = ErrorResponse.builder(ex, ex.getBody()).build();
 		return new ResponseEntity<>(jsonObject.toString(), HttpStatus.NOT_FOUND);
 	}
 
