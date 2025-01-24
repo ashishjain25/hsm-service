@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -81,24 +82,25 @@ public class HsmGoogleController {
 	 * Create a new key ring in a given Project and Location.
 	 * 
 	 * @param id
+	 * @param cryptoDTO
 	 * @return the newly created key ring
 	 */
 	@PostMapping("/cryptokey")
 	public ResponseEntity<CryptoKeyDTO> createCryptoKey(
 			@NotNull(message = "Please provide key ring id") @RequestParam String keyringid,
-			@NotNull(message = "Please provide key id") @RequestParam String keyid) {
-		logger.info("Received request to create key ring");
-		CryptoKey cryptoKey = hsmGoogleService.createCryptoKey(keyringid, keyid);
+			@Valid @RequestBody CryptoKeyDTO cryptoDto) {
+		logger.info("Received request to create crypto key");
+		CryptoKey cryptoKey = hsmGoogleService.createCryptoKey(keyringid, cryptoDto);
 
 		if (cryptoKey == null)
 			return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
 
 		logger.info("Crypto key {} created successfully", cryptoKey.getName());
 
-		CryptoKeyDTO cryptoKeyResponse = new CryptoKeyDTO(cryptoKey.getName());
+		CryptoKeyDTO cryptoKeyResponse = new CryptoKeyDTO(cryptoKey.getName(), cryptoKey.getPurpose().name(),
+				cryptoKey.getVersionTemplate().getAlgorithm().name(),cryptoKey.getLabelsMap());
 		return new ResponseEntity<>(cryptoKeyResponse, HttpStatus.OK);
 	}
-
 	/**
 	 * Get list of crypto keys
 	 * 
@@ -111,10 +113,11 @@ public class HsmGoogleController {
 		ListCryptoKeysPagedResponse pagedResponse = hsmGoogleService.getCryptoKeys(keyringId);
 
 		List<CryptoKeyDTO> cryptoKeys = new ArrayList<>();
-		for (CryptoKey cryptokey : pagedResponse.iterateAll()) {
-			CryptoKeyDTO cryptokeyDTO = new CryptoKeyDTO(cryptokey.getName());
-			cryptoKeys.add(cryptokeyDTO);
-			logger.info("name: {}", cryptokey.getName());
+		for (CryptoKey cryptoKey : pagedResponse.iterateAll()) {
+			logger.info("name: {}", cryptoKey.getName());
+			CryptoKeyDTO cryptoKeyDTO = new CryptoKeyDTO(cryptoKey.getName(), cryptoKey.getPurpose().name(),
+					cryptoKey.getVersionTemplate().getAlgorithm().name(),cryptoKey.getLabelsMap());
+			cryptoKeys.add(cryptoKeyDTO);
 		}
 		if (cryptoKeys.size() == 0)
 			return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
