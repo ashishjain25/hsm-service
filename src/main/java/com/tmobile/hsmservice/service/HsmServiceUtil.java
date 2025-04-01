@@ -1,26 +1,57 @@
 package com.tmobile.hsmservice.service;
 
-import java.util.Calendar;
-import java.util.Date;
-
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
 import iaik.pkcs.pkcs11.Mechanism;
 import iaik.pkcs.pkcs11.MechanismInfo;
 import iaik.pkcs.pkcs11.Session;
 import iaik.pkcs.pkcs11.TokenException;
 import iaik.pkcs.pkcs11.objects.AESSecretKey;
 import iaik.pkcs.pkcs11.objects.KeyPair;
+import iaik.pkcs.pkcs11.objects.PrivateKey;
+import iaik.pkcs.pkcs11.objects.PublicKey;
 import iaik.pkcs.pkcs11.objects.RSAPrivateKey;
 import iaik.pkcs.pkcs11.objects.RSAPublicKey;
 import iaik.pkcs.pkcs11.wrapper.PKCS11Constants;
+import io.opentelemetry.api.internal.StringUtils;
 
 @Component
 public class HsmServiceUtil {
 
-	private Logger logger = LoggerFactory.getLogger(HsmService.class);
+	private Logger logger = LoggerFactory.getLogger(HsmServiceUtil.class);
+
+	private RSAPrivateKey privateKey;
+
+	private RSAPublicKey publicKey;
+
+	private AESSecretKey aesSecretKey;
+
+	public AESSecretKey getAesSecretKey() {
+		return aesSecretKey;
+	}
+
+	public void setAesSecretKey(AESSecretKey aesSecretKey) {
+		this.aesSecretKey = aesSecretKey;
+	}
+
+	public RSAPrivateKey getPrivateKey() {
+		return privateKey;
+	}
+
+	public void setPrivateKey(RSAPrivateKey privateKey) {
+		this.privateKey = privateKey;
+	}
+
+	public RSAPublicKey getPublicKey() {
+		return publicKey;
+	}
+
+	public void setPublicKey(RSAPublicKey publicKey) {
+		this.publicKey = publicKey;
+	}
 
 	/**
 	 * Method to create AES Key
@@ -29,35 +60,28 @@ public class HsmServiceUtil {
 	 * @param label:   Label of AES key
 	 * @return generated and stored AES key
 	 */
-	public AESSecretKey createAESKey(Session session, char[] label) {
+	public AESSecretKey createAESKey(Session session, char[] label) throws TokenException {
 
 		Mechanism keyMechanism = Mechanism.get(PKCS11Constants.CKM_AES_KEY_GEN);
 
 		AESSecretKey secretKeyTemplate = new AESSecretKey();
-		logger.info("****************AES key attributes {}", secretKeyTemplate.getSetAttributes());
-		secretKeyTemplate.getPrivate().setBooleanValue(Boolean.TRUE);
+
+		secretKeyTemplate.getToken().setBooleanValue(Boolean.TRUE);
 		secretKeyTemplate.getSensitive().setBooleanValue(Boolean.TRUE);
-		secretKeyTemplate.getExtractable().setBooleanValue(Boolean.FALSE);
-
-		secretKeyTemplate.getLabel().setCharArrayValue(label);
-		secretKeyTemplate.getValueLen().setLongValue(32l);
-
+		//secretKeyTemplate.getExtractable().setBooleanValue(Boolean.TRUE);
+		//secretKeyTemplate.getModifiable().setBooleanValue(Boolean.TRUE);
 		secretKeyTemplate.getEncrypt().setBooleanValue(Boolean.TRUE);
 		secretKeyTemplate.getDecrypt().setBooleanValue(Boolean.TRUE);
-		secretKeyTemplate.getWrap().setBooleanValue(Boolean.TRUE);
-		secretKeyTemplate.getUnwrap().setBooleanValue(Boolean.TRUE);
-		secretKeyTemplate.getToken().setBooleanValue(Boolean.TRUE);
-		secretKeyTemplate.getUnwrapTemplate().setPresent(false);
+		//secretKeyTemplate.getWrap().setBooleanValue(Boolean.TRUE);
+		//secretKeyTemplate.getUnwrap().setBooleanValue(Boolean.TRUE);
+		secretKeyTemplate.getLabel().setCharArrayValue(label);
+		secretKeyTemplate.getValueLen().setLongValue(32L);
 
-		logger.info("AES key attributes {}", secretKeyTemplate.getSetAttributes());
-		try {
-			AESSecretKey generatedSecretKey = (AESSecretKey) session.generateKey(keyMechanism, secretKeyTemplate);
-			return generatedSecretKey;
-		} catch (TokenException e) {
-			System.out.println("AES key generation error: " + e.getMessage());
-			e.printStackTrace();
-		}
-		return null;
+		setAesSecretKey(secretKeyTemplate);
+
+		AESSecretKey generatedSecretKey = (AESSecretKey) session.generateKey(keyMechanism, secretKeyTemplate);
+		return generatedSecretKey;
+
 	}
 
 	/**
@@ -68,89 +92,150 @@ public class HsmServiceUtil {
 	 * @return KeyPair if pair of keys generated, else null.
 	 * @throws TokenException : returns if exception occurred in the Token.
 	 */
-	public KeyPair generateRSAKeyPair(Session session, RSAPrivateKey privateKeyTemplate, RSAPublicKey publicKeyTemplate,
-			String imei) throws TokenException {
+	public KeyPair generateRSAKeyPair(Session session, String label) throws TokenException {
 
-		MechanismInfo mechanismInfo = null;
-		Mechanism keyPairGenerationMechanism = null;
+		Mechanism keyPairGenerationMechanism = Mechanism.get(PKCS11Constants.CKM_RSA_PKCS_KEY_PAIR_GEN);
+		MechanismInfo mechanismInfo = session.getToken().getMechanismInfo(keyPairGenerationMechanism);
 
-		mechanismInfo = session.getToken().getMechanismInfo(Mechanism.get(PKCS11Constants.CKM_RSA_PKCS_KEY_PAIR_GEN));
-		keyPairGenerationMechanism = Mechanism.get(PKCS11Constants.CKM_RSA_PKCS_KEY_PAIR_GEN);
+		RSAPublicKey publicKeyTemplate = new RSAPublicKey();
+		RSAPrivateKey privateKeyTemplate = new RSAPrivateKey();
 
 		if ((keyPairGenerationMechanism != null) && (mechanismInfo != null)) {
 
-			privateKeyTemplate.getSensitive().setBooleanValue(Boolean.TRUE);
 			privateKeyTemplate.getToken().setBooleanValue(Boolean.TRUE);
 			privateKeyTemplate.getPrivate().setBooleanValue(Boolean.TRUE);
+			privateKeyTemplate.getSign().setBooleanValue(Boolean.TRUE);
+			privateKeyTemplate.getDecrypt().setBooleanValue(Boolean.TRUE);
+			privateKeyTemplate.getSensitive().setBooleanValue(Boolean.TRUE);
+			privateKeyTemplate.getLabel().setCharArrayValue((label).toCharArray());
+
+			byte[] publicExponentBytes = { 0x01, 0x00, 0x00, 0x00, 0x01 };
 
 			publicKeyTemplate.getToken().setBooleanValue(Boolean.TRUE);
+			publicKeyTemplate.getPrivate().setBooleanValue(Boolean.FALSE);
+			publicKeyTemplate.getVerify().setBooleanValue(Boolean.TRUE);
+			publicKeyTemplate.getEncrypt().setBooleanValue(Boolean.TRUE);
+			publicKeyTemplate.getLabel().setCharArrayValue((label).toCharArray());
+			publicKeyTemplate.getPublicExponent().setByteArrayValue(publicExponentBytes);
+			publicKeyTemplate.getModulusBits().setLongValue(2048l);
 
-			publicKeyTemplate.getVerify().setBooleanValue(mechanismInfo.isVerify());
-			publicKeyTemplate.getVerifyRecover().setBooleanValue(mechanismInfo.isVerifyRecover());
-			publicKeyTemplate.getEncrypt().setBooleanValue(mechanismInfo.isEncrypt());
-			publicKeyTemplate.getDerive().setBooleanValue(mechanismInfo.isDerive());
-			publicKeyTemplate.getId().setByteArrayValue((imei + "PublicKey").getBytes());
-			publicKeyTemplate.getLabel().setCharArrayValue((imei + "PublicKey").toCharArray());
-			publicKeyTemplate.getKeyGenMechanism().setMechanism(keyPairGenerationMechanism);
-			// publicKeyTemplate.getSubject().setByteArrayValue((imei+"subject").getBytes());
-
-			Calendar cal = Calendar.getInstance();
-			Date today = cal.getTime();
-			cal.add(Calendar.YEAR, 1);
-			Date nextYear = cal.getTime();
-
-			Calendar.getInstance().add(Calendar.YEAR, 1);
-			publicKeyTemplate.getStartDate().setDateValue(today);
-			publicKeyTemplate.getEndDate().setDateValue(nextYear);
-			publicKeyTemplate.getSubject().setPresent(false);
-			// publicKeyTemplate.removeAttribute(PKCS11Constants.CKA_WRAP_TEMPLATE);
-			// publicKeyTemplate.getWrapTemplate().setValue(publicKeyTemplate);
-			// publicKeyTemplate.getAllowedMechanisms().setValue(keyPairGenerationMechanism);
-			// privateKeyTemplate.removeAttribute(PKCS11Constants.CKR_DEVICE_ERROR);
-			// publicKeyTemplate.removeAttribute(PKCS11Constants.CKA_ALLOWED_MECHANISMS);
-			// publicKeyTemplate.getWrapTemplate().isPresent();
-			// publicKeyTemplate.getAllowedMechanisms().isPresent();
-
-			//logger.info("Public key attributes {}", publicKeyTemplate.getSetAttributes());
-
-			/*
-			 * publicKeyTemplate.getWrap() .setBooleanValue(mechanismInfo.isUnwrap());
-			 */
-
-			privateKeyTemplate.getSign().setBooleanValue(mechanismInfo.isSign());
-			privateKeyTemplate.getSignRecover().setBooleanValue(mechanismInfo.isSignRecover());
-			privateKeyTemplate.getDecrypt().setBooleanValue(mechanismInfo.isDecrypt());
-			privateKeyTemplate.getDerive().setBooleanValue(mechanismInfo.isDerive());
-			privateKeyTemplate.getId().setByteArrayValue((imei + "PrivateKey").getBytes());
-			privateKeyTemplate.getLabel().setCharArrayValue((imei + "PrivateKey").toCharArray());
-			privateKeyTemplate.getKeyGenMechanism().setMechanism(keyPairGenerationMechanism);
-			privateKeyTemplate.getStartDate().setDateValue(today);
-			privateKeyTemplate.getEndDate().setDateValue(nextYear);
-			// privateKeyTemplate.getSubject().setByteArrayValue((imei+"subject").getBytes());
-			// privateKeyTemplate.removeAttribute(PKCS11Constants.CKA_WRAP_TEMPLATE);
-			// privateKeyTemplate.removeAttribute(PKCS11Constants.CKR_DEVICE_ERROR);
-			// privateKeyTemplate.removeAttribute(PKCS11Constants.CKA_ALLOWED_MECHANISMS);
-			// privateKeyTemplate.getAllowedMechanisms().isPresent();
-			// privateKeyTemplate.getWrapWithTrusted().isPresent();
-
-			//logger.info("Private key attributes {}", privateKeyTemplate.getSetAttributes());
-			/*
-			 * privateKeyTemplate.getUnwrap() .setBooleanValue(mechanismInfo.isUnwrap());
-			 */
+			setPrivateKey(privateKeyTemplate);
+			setPublicKey(publicKeyTemplate);
 
 			return session.generateKeyPair(keyPairGenerationMechanism, publicKeyTemplate, privateKeyTemplate);
 
-			/*
-			 * session.findObjectsInit(publicKeyTemplate);
-			 * logger.info("object length {} ",session.findObjects(5).length); Object[]
-			 * privateSignatureKeys; List signatureKeyList = new Vector(4); while
-			 * ((privateSignatureKeys = session.findObjects(1)).length > 0) {
-			 * logger.info("private key: {}", privateSignatureKeys[0]);
-			 * signatureKeyList.add(privateSignatureKeys[0]); }
-			 */
 		}
 		return null;
 
+	}
+
+	public List<PrivateKey> getPrivateKeys(Session session) throws TokenException {
+		// find private RSA keys that the application can use for signing - START HERE
+		RSAPrivateKey privateSignatureKeyTemplate = new RSAPrivateKey();
+		privateSignatureKeyTemplate.getSign().setBooleanValue(Boolean.TRUE);
+
+		session.findObjectsInit(privateSignatureKeyTemplate);
+		Object[] privateSignatureKeys;
+
+		List<PrivateKey> signatureKeyList = new ArrayList<>();
+		while ((privateSignatureKeys = session.findObjects(1)).length > 0) {
+			// logger.info("private key: {}", privateSignatureKeys[0]);
+			if (privateSignatureKeys[0] instanceof PrivateKey) {
+				// logger.info("Adding private key object to list");
+				signatureKeyList.add((PrivateKey) privateSignatureKeys[0]);
+			}
+		}
+
+		session.findObjectsFinal();
+		return signatureKeyList;
+	}
+
+	public PublicKey getPublicKey(Session session, String label) throws TokenException {
+		// find public RSA keys that the application can use for signing - START HERE
+		RSAPublicKey publicSignatureKeyTemplate = new RSAPublicKey();
+		session.findObjectsInit(publicSignatureKeyTemplate);
+
+		Object[] publicSignatureKeys;
+		PublicKey key = null;
+		while ((publicSignatureKeys = session.findObjects(1)).length > 0) {
+			if (publicSignatureKeys[0] instanceof PublicKey) {
+				key = (PublicKey) publicSignatureKeys[0];
+			//	logger.info("key label :{}", key.getLabel());
+				
+				if (key.getLabel() != null && key.getLabel().getCharArrayValue() != null
+						&& String.valueOf(key.getLabel().getCharArrayValue()).equals(label)) {
+					break;
+				}
+			}
+		}
+
+		session.findObjectsFinal();
+		return key;
+
+	}
+	
+	public PrivateKey getPrivateKey(Session session, String label) throws TokenException {
+		// find private RSA keys that the application can use for signing - START HERE
+		RSAPrivateKey privateSignatureKeyTemplate = new RSAPrivateKey();
+		session.findObjectsInit(privateSignatureKeyTemplate);
+
+		Object[] publicSignatureKeys;
+		PrivateKey key = null;
+		while ((publicSignatureKeys = session.findObjects(1)).length > 0) {
+			if (publicSignatureKeys[0] instanceof PrivateKey) {
+				key = (PrivateKey) publicSignatureKeys[0];
+			//	logger.info("key label :{}", key.getLabel());
+				
+				if (key.getLabel() != null && key.getLabel().getCharArrayValue() != null
+						&& String.valueOf(key.getLabel().getCharArrayValue()).equals(label)) {
+					break;
+				}
+			}
+		}
+
+		session.findObjectsFinal();
+		return key;
+
+	}
+
+	public List<PublicKey> getPublicKeys(Session session) throws TokenException {
+		// find public RSA keys that the application can use for signing - START HERE
+		RSAPublicKey publicSignatureKeyTemplate = new RSAPublicKey();
+
+		session.findObjectsInit(publicSignatureKeyTemplate);
+		Object[] publicSignatureKeys;
+
+		List<PublicKey> signatureKeyList = new ArrayList<>();
+		while ((publicSignatureKeys = session.findObjects(1)).length > 0) {
+			// logger.info("public key: {}", publicSignatureKeys[0]);
+			if (publicSignatureKeys[0] instanceof PublicKey) {
+				// logger.info("Adding public key object to list");
+				signatureKeyList.add((PublicKey) publicSignatureKeys[0]);
+			}
+		}
+
+		session.findObjectsFinal();
+		return signatureKeyList;
+	}
+
+	public List<AESSecretKey> getAESKeys(Session session) throws TokenException {
+		// find public RSA keys that the application can use for signing - START HERE
+		AESSecretKey aesSignatureKeyTemplate = new AESSecretKey();
+
+		session.findObjectsInit(aesSignatureKeyTemplate);
+		Object[] aesSignatureKeys;
+
+		List<AESSecretKey> signatureKeyList = new ArrayList<>();
+		while ((aesSignatureKeys = session.findObjects(1)).length > 0) {
+			// logger.info("aes key: {}", aesSignatureKeys[0]);
+			if (aesSignatureKeys[0] instanceof AESSecretKey) {
+				// logger.info("Adding AES key object to list");
+				signatureKeyList.add((AESSecretKey) aesSignatureKeys[0]);
+			}
+		}
+
+		session.findObjectsFinal();
+		return signatureKeyList;
 	}
 
 }

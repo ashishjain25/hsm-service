@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,5 +102,16 @@ public class GlobalExceptionHandler {
 			}
 		});
 		return errors;
+	}
+	
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<String> handleExceptions(NoSuchElementException ex) {
+		logger.info("NoSuchElementException observed");
+		ex.printStackTrace();
+		JsonObject jsonObject = new JsonObject();
+		jsonObject.addProperty("message", ex.getMessage());
+		return new ResponseEntity<>(jsonObject.toString(), HttpStatus.BAD_REQUEST);
+		
 	}
 }
